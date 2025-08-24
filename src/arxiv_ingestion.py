@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
 import langextract as lx
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 import tempfile
 from PyPDF2 import PdfReader
 from langchain.docstore.document import Document
@@ -81,25 +82,33 @@ def _extract_author_affiliations(paper):
     for ext in result.extractions:
         authors.append(ext.extraction_text)
         affiliations.append(ext.attributes['affiliation'])
-    doc = Document(
-        page_content=paper['abstract'],
-        metadata={
-            "title": paper["title"],
-            "abstract": paper["abstract"],
-            "authors": ','.join(authors),
-            "affiliations": ','.join(affiliations),
-            "published": paper["published"],
-            "pdf_url": paper["pdf_url"]
-        }
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=200,      # ~800 characters (tune if you prefer tokens)
+        chunk_overlap=120,   # overlap ensures continuity across chunks
     )
-    return doc
+    documents = []
+    chunks = splitter.split_text(paper['abstract'])
+    for chunk in chunks:
+        documents.append(Document(
+            page_content=chunk,
+            metadata={
+                "title": paper["title"],
+                "abstract": paper["abstract"],
+                "authors": ','.join(authors),
+                "affiliations": ','.join(affiliations),
+                "published": paper["published"],
+                "pdf_url": paper["pdf_url"]
+            }
+        ))
+    print('chunks are ',len(documents))
+    return documents
 #entry point
 def ingest_documents(max_count = 1):
-    raw_data = _fetch_arxiv_cs_cv(max_results=2)
+    raw_data = _fetch_arxiv_cs_cv(max_results=30)
     papers = _parse_arxiv_xml(raw_data)
     documents = []
     for i in range(max_count):
-        documents.append(_extract_author_affiliations(papers[i]))
+        documents.extend(_extract_author_affiliations(papers[i]))
     return documents
 if __name__ == "__main__":
     print("Fetching CS.CV papers from arXiv...")
