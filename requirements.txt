@@ -1,0 +1,7 @@
+langextract
+PyPDF2
+langchain
+chromadb
+transformers
+sentence-transformers
+ollama
